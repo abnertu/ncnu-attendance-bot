@@ -1,0 +1,158 @@
+# 暨大差勤打卡工具
+
+在 Windows 使用 TypeScript 與 Playwright，讀取暨大差勤網站的個人行事曆和簽到退紀錄，再依每日計畫自動打卡。
+
+[![Node.js](https://img.shields.io/badge/Node.js-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+
+實際送出預設關閉。請依實際出勤使用。
+
+## 安裝與登入
+
+需要 Windows 10/11、pnpm，以及 Node.js 24 以上。也支援 Node.js 20.19 以上的 20.x 版、22.13 以上的 22.x 版。
+
+```powershell
+pnpm install
+pnpm exec playwright install chromium
+pnpm run login
+pnpm run sync
+```
+
+在開啟的瀏覽器完成登入，再回到終端機按 Enter。登入狀態（Session）存於 `.auth/state.json`；過期後重新執行 `login`。工具不儲存帳號密碼。
+
+`sync` 讀取當月行事曆、今日是否上班及簽到退時間。先確認輸出正確，再啟用排程。
+
+## 唯讀檢查與本機狀態
+
+| 指令                         | 用途                                                  |
+| ---------------------------- | ----------------------------------------------------- |
+| `pnpm run sync`              | 讀取網站，更新 `.state/site-YYYY-MM-DD.json`。        |
+| `pnpm run dry-run`           | 與 `sync` 相同。                                      |
+| `pnpm run tick -- --dry-run` | 與 `sync` 相同。                                      |
+| `pnpm run inspect`           | 開啟瀏覽器，檢查 Selector 並儲存 `logs/inspect.png`。 |
+| `pnpm run plan`              | 顯示今日計畫、啟用狀態與最近一次網站快照。            |
+| `pnpm run status`            | 與 `plan` 相同。                                      |
+
+網站唯讀指令不改每日計畫的執行狀態，也不呼叫送出函式。即使 `execution.enabled=true`，仍有瀏覽器事件與請求攔截阻止送出。`blockedRequests=0` 表示沒有嘗試送出打卡請求。
+
+`plan` 與 `status` 不連線網站；今日計畫不存在時會建立計畫。快照的 `fetchedAt` 是上次讀取時間。正式送出前會重新查詢網站，快照不作為執行依據。
+
+## 設定
+
+`config.defaults.json` 提供網站網址、導覽、行事曆、紀錄表、按鈕與成功訊息等規則。`config.json` 是個人覆寫檔，不納入 Git。
+
+物件逐層合併，陣列整個取代。缺少 `config.json` 時使用預設值，實際送出仍為關閉。一般只需設定時間及是否啟用：
+
+```json
+{
+  "schedule": {
+    "checkIn": { "from": "08:00", "to": "08:15" },
+    "checkOut": { "from": "17:16", "to": "17:30" }
+  },
+  "execution": {
+    "enabled": false,
+    "headless": true
+  }
+}
+```
+
+時間範圍含結束那一分鐘。每日隨機時間只建立一次，存於 `.state/YYYY-MM-DD.json`。當天修改設定不會重抽時間。
+
+網站改版時，可在 `config.json` 覆寫 `site.calendar`、`site.records` 或 `site.checkIn/checkOut`。帳號、Cookie、Token 不應放入設定檔。
+
+## 工作日與已打卡判斷
+
+1. 讀取首頁「個人行事曆」，驗證年月、全月日期數量及唯一性。
+2. 依 `holidayTexts` 判定休息日與國定假日，依 `workingTexts` 判定補班。無註記的日期視為一般上班日，不另行排除週末。
+3. 遇到未知註記、衝突標記、缺少日期、登入過期或連線失敗時，停止本次操作。
+4. 讀取「線上簽到退」的日期欄位與紀錄表，依動作名稱及同日時間戳記辨識紀錄。日期不符、重複或缺少動作列時停止。
+5. 空白時間代表尚無紀錄；已有紀錄就回傳 `already`。正式送出前再讀一次，避免與手動打卡重複。
+
+行事曆以網站排班資料為準。工具不另行推斷全日或部分請假，無法識別的註記會停止執行。可用 `schedule.skipDates` 指定暫停日期。
+
+只有明確設定 `site.calendar.enabled=false`，才改用 `schedule.workingDays` 的星期設定。建立每日計畫不代表已確認當日需上班。
+
+## 啟用排程
+
+1. 執行 `pnpm run sync`，確認日期、行事曆及簽到退時間。
+2. 在 `config.json` 設定 `execution.enabled=true`，排程執行時使用 `execution.headless=true`。
+3. 在 PowerShell 安裝排程：
+
+```powershell
+.\windows\install-task.ps1
+```
+
+若執行政策阻擋，可只對本次處理程序略過政策：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\install-task.ps1
+```
+
+排程 `AttendanceBot` 使用執行安裝腳本的 Windows 帳號，安全性選項為：
+
+- 不論使用者登入與否均執行：`LogonType=S4U`。
+- 不儲存 Windows 密碼，僅有本機電腦資源的存取權。
+- 隱藏：`Settings.Hidden=true`。
+
+每分鐘執行 `windows/run-tick.cmd`，實際秒數由每日計畫決定。電腦需開機、未睡眠且能連線網站；使用者可登出。S4U 的網路及加密檔案存取限制，請參考 [Microsoft 說明](https://learn.microsoft.com/en-us/windows/win32/api/taskschd/ne-taskschd-task_logon_type)。登出後的網站連線需在目標電腦確認。
+
+舊排程需重新執行安裝腳本，才會套用新設定。專案路徑變更後也需重新安裝。觸發器的重複期間為十年。
+
+```powershell
+Get-ScheduledTask -TaskName AttendanceBot | Select-Object TaskName, State, Principal, Settings
+Get-ScheduledTaskInfo -TaskName AttendanceBot
+Get-Content .\logs\scheduler.log -Tail 50
+pnpm run status
+```
+
+安裝與移除都支援自訂名稱；使用相同名稱即可更新或移除：
+
+```powershell
+.\windows\install-task.ps1 -TaskName AttendanceBot
+.\windows\remove-task.ps1 -TaskName AttendanceBot
+```
+
+## 執行保護
+
+- `enabled=false` 時，排程不查網站、不送出，也不將待執行項目標成逾時。
+- 僅在動作即將到期時查核網站；當日放假記為 `skipped`。
+- 超過 `maxLateSeconds` 不補點，記為 `missed`。導覽後與送出前會再次檢查日期及允許時間。
+- 排程的 `IgnoreNew` 與程式執行鎖共同避免重疊。行程已終止的鎖可於下次執行回收。
+- 導覽或讀取失敗且尚未嘗試送出時，保留原狀態，下個週期可在允許時間內重試。
+- 點擊前先保存 `started`；其後失敗記為 `needs-review`，不自動重送。崩潰留下的 `started` 也不重送。
+- 只接受符合 `confirmDialogContains` 的確認視窗。成功提示支援原生 alert、HTML Toast/Modal 及新視窗。
+
+成功提示代表網站回覆成功，出勤報表可能延後更新。結果不明時先查核網站，再用 `sync` 更新快照。`sync` 不會解除 `needs-review` 或清除 `started`。請勿刪除含 `started`、`success` 或 `needs-review` 的計畫來重試。
+
+## 手動實際打卡
+
+以下指令會操作正式網站。必須在互動式終端機親自輸入小寫 `y`：
+
+```powershell
+pnpm run manual:checkin
+pnpm run manual:checkout
+```
+
+手動指令略過排程時間與 `enabled` 開關，仍檢查網站工作日、今日紀錄、日期及本機防重複狀態。舊的 `test:checkin` 與 `test:checkout` 已改名為上述指令。
+
+## Windows just 指令
+
+可選擇安裝 [just](https://just.systems/)，以 Windows PowerShell 執行常用指令：
+
+```powershell
+just
+just install
+just login
+just sync
+just check
+just install-task
+```
+
+`just` 只列出指令。`just tick` 會執行排程週期，啟用時可能實際送出。`just manual-checkin` 與 `just manual-checkout` 仍需互動確認。完整指令請執行 `just --list`。
+
+開發指令與變更規範見 [AGENTS.md](AGENTS.md)。
+
+## 本機資料
+
+`.auth/`、`.state/`、`logs/` 與 `config.json` 均由 `.gitignore` 排除。這些檔案可能包含 Session、個人出勤紀錄、設定或截圖，請保留於本機。
+
+Windows 檔案存取權限以資料夾 ACL 為準。`logs/` 尚未自動輪替，可自行清理舊截圖與日誌。

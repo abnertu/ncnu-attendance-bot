@@ -1,0 +1,42 @@
+{
+  "name": "attendance-bot",
+  "version": "1.4.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "login": "tsx src/login.ts",
+    "inspect": "tsx src/inspect.ts",
+    "sync": "tsx src/sync-cli.ts",
+    "dry-run": "tsx src/sync-cli.ts",
+    "tick": "tsx src/runner.ts",
+    "plan": "tsx src/runner.ts --plan",
+    "status": "tsx src/runner.ts --status",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm run lint && pnpm run format:check && pnpm run typecheck && pnpm test",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test --test-concurrency=1 tests/*.test.ts",
+    "manual:checkin": "tsx src/runner.ts --manual=checkIn",
+    "manual:checkout": "tsx src/runner.ts --manual=checkOut"
+  },
+  "dependencies": {
+    "playwright": "^1.56.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "@types/node": "^22.0.0",
+    "eslint": "^10.14.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^16.5.0",
+    "prettier": "^3.9.10",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.72.1"
+  },
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  }
+}

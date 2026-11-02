@@ -1,0 +1,70 @@
+{
+  "site": {
+    "url": "https://pv.ncnu.edu.tw/EIP/main.aspx",
+    "attendanceUrl": "https://pv.ncnu.edu.tw/EIP/humanly/data_transfer/hum_wkrecord_online_NCNU.aspx",
+    "loginUrl": "https://ccweb.ncnu.edu.tw/pv/?refer=https://pv.ncnu.edu.tw/EIP/Login/LoginGetNCNU.resource.aspx",
+    "loginUrlContains": "/Login",
+    "navigationFrameSelector": "frame[name='subap_frame']",
+    "navigationHoverSelector": "span:has-text('資料作業')",
+    "navigationSelector": "td:has-text('線上簽到退')",
+    "frameSelector": "iframe#main",
+    "calendar": {
+      "enabled": true,
+      "url": "https://pv.ncnu.edu.tw/EIP/Resource/Dashboard_ncnu.resource.aspx",
+      "tableSelector": "#Calendard_Calendar",
+      "titleSelector": ":scope > tbody > tr:first-child table td:nth-child(2)",
+      "dayCellSelector": ":scope > tbody > tr:nth-child(n+3) > td",
+      "monthPattern": "^(\\d{4})年\\s*(\\d{1,2})月$",
+      "dayPattern": "^(\\d{1,2})(?:\\s|$)",
+      "holidayTexts": ["休息日", "國定假日", "例假日", "放假", "停止上班"],
+      "workingTexts": ["補班", "補行上班", "調整上班", "上班日"],
+      "neutralTexts": []
+    },
+    "records": {
+      "tableSelector": "#ContentPlaceHolder1_Table_record",
+      "rowSelector": ":scope > tbody > tr",
+      "dateSelector": "#ContentPlaceHolder1_HiddenField_humwr_date",
+      "labelColumn": 0,
+      "timestampColumn": 1,
+      "timestampPattern": "^(\\d{4}-\\d{2}-\\d{2})\\s+((?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d)?)$",
+      "emptyTexts": ["", "--", "尚未簽到", "尚未簽退"],
+      "labels": { "checkIn": "上班簽到", "checkOut": "下班簽退" }
+    },
+    "checkIn": {
+      "buttonSelector": "input#ContentPlaceHolder1_Button_humwr_amst_hum_wkrecord",
+      "submitField": "ctl00$ContentPlaceHolder1$Button_humwr_amst_hum_wkrecord",
+      "alreadySelector": "",
+      "successSelector": "",
+      "successDialogContains": "線上刷卡成功",
+      "successDialogType": "alert",
+      "acceptConfirmDialogs": true,
+      "confirmDialogContains": "確定要簽到",
+      "successPopupSelector": ""
+    },
+    "checkOut": {
+      "buttonSelector": "input#ContentPlaceHolder1_Button_humwr_pmet_hum_wkrecord",
+      "submitField": "ctl00$ContentPlaceHolder1$Button_humwr_pmet_hum_wkrecord",
+      "alreadySelector": "",
+      "successSelector": "",
+      "successDialogContains": "線上刷卡成功",
+      "successDialogType": "alert",
+      "acceptConfirmDialogs": true,
+      "confirmDialogContains": "確定要簽退",
+      "successPopupSelector": ""
+    }
+  },
+  "schedule": {
+    "timezone": "Asia/Taipei",
+    "workingDays": [1, 2, 3, 4, 5],
+    "skipDates": [],
+    "checkIn": { "from": "08:00", "to": "08:15" },
+    "checkOut": { "from": "17:16", "to": "17:30" }
+  },
+  "execution": {
+    "enabled": false,
+    "headless": true,
+    "maxLateSeconds": 180,
+    "navigationTimeoutMs": 20000,
+    "verificationTimeoutMs": 15000
+  }
+}
