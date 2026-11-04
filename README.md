@@ -66,10 +66,63 @@ pnpm run sync
 3. 遇到未知註記、衝突標記、缺少日期、登入過期或連線失敗時，停止本次操作。
 4. 讀取「線上簽到退」的日期欄位與紀錄表，依動作名稱及同日時間戳記辨識紀錄。日期不符、重複或缺少動作列時停止。
 5. 空白時間代表尚無紀錄；已有紀錄就回傳 `already`。正式送出前再讀一次，避免與手動打卡重複。
+6. 下班簽退必須有今日網站上班紀錄，且間隔須超過 8 小時。剛好 8 小時仍不送出。
 
 行事曆以網站排班資料為準。工具不另行推斷全日或部分請假，無法識別的註記會停止執行。可用 `schedule.skipDates` 指定暫停日期。
 
 只有明確設定 `site.calendar.enabled=false`，才改用 `schedule.workingDays` 的星期設定。建立每日計畫不代表已確認當日需上班。
+
+工時計算使用網站上班時間，包含使用者手動打卡的紀錄。網站時間只有分鐘時，以該分鐘最後一秒計算。
+
+工時不足時，簽退保留 `pending`，下個週期重新查核。超過每日計畫的 `maxLateSeconds` 後，仍記為 `missed`，不延長允許時間。
+
+## 成功通知
+
+上班簽到或下班簽退確認成功後，可透過 SMTP 自動寄信。寄信預設關閉。
+
+1. 在個人 `config.json` 加入下列設定，並替換 SMTP 主機、帳號及寄收件地址。
+2. 將 SMTP 密碼或應用程式密碼存入安裝排程帳號的使用者環境變數。
+3. 重新開啟終端機，讓手動指令讀取新環境變數。
+
+```json
+{
+  "email": {
+    "enabled": true,
+    "host": "smtp.example.com",
+    "port": 587,
+    "secure": false,
+    "user": "sender@example.com",
+    "passwordEnv": "ATTENDANCE_SMTP_PASSWORD",
+    "from": "sender@example.com",
+    "to": "recipient@example.com",
+    "timeoutMs": 15000
+  }
+}
+```
+
+在 PowerShell 設定使用者環境變數，避免將密碼寫入命令歷程：
+
+```powershell
+$smtpPassword = Read-Host 'SMTP 密碼或應用程式密碼' -AsSecureString
+$smtpCredential = New-Object System.Management.Automation.PSCredential -ArgumentList 'smtp', $smtpPassword
+[Environment]::SetEnvironmentVariable(
+  'ATTENDANCE_SMTP_PASSWORD',
+  $smtpCredential.GetNetworkCredential().Password,
+  'User'
+)
+```
+
+使用者環境變數不會加密儲存密碼。`config.json` 只記錄環境變數名稱。
+
+587 埠使用 `secure=false`，並強制 STARTTLS。465 埠使用 `secure=true`。伺服器必須提供有效的 TLS 憑證。設定方式見 [Nodemailer SMTP 說明](https://nodemailer.com/smtp)。
+
+不需驗證的 SMTP 主機，可將 `user` 與 `passwordEnv` 同時留空。排程仍使用安裝者帳號的環境變數。若排程讀不到新變數，請登出再登入 Windows。
+
+程式先保存打卡成功狀態，再寄出通知。已有網站紀錄、跳過、逾時或結果不明時不寄信。
+
+`pnpm run status` 會顯示工作的 `email.status`，值為 `sent` 或 `failed`。`sent` 表示 SMTP 已接受郵件，不保證郵件已送達信箱。
+
+寄信失敗不改變打卡成功狀態，也不自動重寄或重新打卡。日誌記錄 `EMAIL_SENT` 或 `EMAIL_FAILED`。
 
 ## 啟用排程
 
@@ -132,7 +185,7 @@ pnpm run manual:checkin
 pnpm run manual:checkout
 ```
 
-手動指令略過排程時間與 `enabled` 開關，仍檢查網站工作日、今日紀錄、日期及本機防重複狀態。舊的 `test:checkin` 與 `test:checkout` 已改名為上述指令。
+手動指令略過排程時間與 `enabled` 開關，仍檢查網站工作日、今日紀錄、日期及本機防重複狀態。下班簽退仍須超過 8 小時。舊的 `test:checkin` 與 `test:checkout` 已改名為上述指令。
 
 ## Windows just 指令
 

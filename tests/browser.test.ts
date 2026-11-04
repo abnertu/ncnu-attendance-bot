@@ -253,7 +253,7 @@ test('expected confirm followed by success alert submits exactly once on the loc
 });
 
 test('check-out uses its own confirmation and submits once on the local fixture', async () => {
-  await fixture({}, async ({ config, page, posts }) => {
+  await fixture({ checkIn: `${date} 07:59:59` }, async ({ config, page, posts }) => {
     let attempts = 0;
     const result = await punchOnPage(page, 'checkOut', date, config, {
       now,
@@ -266,6 +266,94 @@ test('check-out uses its own confirmation and submits once on the local fixture'
     assert.equal(attempts, 1);
     assert.equal(posts(), 1);
   });
+});
+
+test('check-out requires a website check-in and strictly more than eight hours', async () => {
+  for (const checkIn of [
+    undefined,
+    `${date} 16:01:00`,
+    `${date} 08:00:01`,
+    `${date} 08:00:00`,
+    `${date} 08:00`,
+  ]) {
+    await fixture({ checkIn }, async ({ config, page, posts }) => {
+      const operation = punchOnPage(page, 'checkOut', date, config, {
+        now,
+        beforeSend: () => assert.fail('insufficient or unknown work duration submitted'),
+      });
+
+      if (checkIn === undefined || checkIn === `${date} 16:01:00`) {
+        await assert.rejects(operation, /上班/);
+      } else {
+        assert.equal((await operation).status, 'pending');
+      }
+
+      assert.equal(posts(), 0);
+    });
+  }
+});
+
+test('minute-only check-in timestamps use the end of the minute before allowing check-out', async () => {
+  await fixture({ checkIn: `${date} 08:00` }, async ({ config, page, posts }) => {
+    const pending = await punchOnPage(page, 'checkOut', date, config, {
+      now: () => new Date('2026-10-19T08:00:30Z'),
+      beforeSend: () => assert.fail('minute-only record allowed early check-out'),
+    });
+
+    assert.equal(pending.status, 'pending');
+    assert.equal(posts(), 0);
+    const result = await punchOnPage(page, 'checkOut', date, config, {
+      now: () => new Date('2026-10-19T08:01:00Z'),
+      latestSeconds: 16 * 3600 + 180,
+      beforeSend: () => {},
+    });
+
+    assert.equal(result.status, 'success');
+    assert.equal(posts(), 1);
+  });
+});
+
+test('waiting for eight hours preserves the lateness boundary', async () => {
+  await fixture({ checkIn: `${date} 08:00:00` }, async ({ config, page, posts }) => {
+    const options = {
+      now,
+      latestSeconds: 16 * 3600,
+      beforeSend: () => assert.fail('late check-out submitted'),
+    };
+
+    assert.equal((await punchOnPage(page, 'checkOut', date, config, options)).status, 'pending');
+    const late = await punchOnPage(page, 'checkOut', date, config, {
+      ...options,
+      now: () => new Date('2026-10-19T08:00:01Z'),
+    });
+
+    assert.equal(late.status, 'missed');
+    assert.equal(posts(), 0);
+  });
+});
+
+test('changed website check-in or manual check-out during preparation prevents submission', async () => {
+  for (const action of ['checkIn', 'checkOut'] as const) {
+    await fixture({ checkIn: `${date} 07:00:00` }, async ({ config, page, posts }) => {
+      const result = await punchOnPage(page, 'checkOut', date, config, {
+        now,
+        onSnapshot: async () => {
+          await page
+            .locator('#ContentPlaceHolder1_Table_record tr')
+            .nth(action === 'checkIn' ? 1 : 2)
+            .locator('td')
+            .nth(1)
+            .evaluate((element) => {
+              element.textContent = '2026-10-19 15:59:00';
+            });
+        },
+        beforeSend: () => assert.fail('changed record submitted'),
+      });
+
+      assert.equal(result.status, action === 'checkIn' ? 'pending' : 'already');
+      assert.equal(posts(), 0);
+    });
+  }
 });
 
 test('a record appearing during UI preparation prevents submission', async () => {

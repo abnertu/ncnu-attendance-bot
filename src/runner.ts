@@ -19,6 +19,7 @@ import {
   secondsOfTime,
 } from './common.js';
 import { acquireRunLock } from './lock.js';
+import { notifyPunchSuccess } from './email.js';
 import { punchOnPage } from './punch.js';
 import { cachedSnapshot, saveSnapshot, syncSite } from './sync.js';
 
@@ -78,6 +79,9 @@ async function runAction(
     log(`${plan.date} ${action}: ${result.status.toUpperCase()} ${result.detail}`);
 
     if (result.status === 'success') {
+      job.updatedAt = new Date().toISOString();
+      savePlan(plan);
+      job.email = await notifyPunchSuccess(action, plan, config);
       await page
         .screenshot({
           path: resolve(LOG_DIR, `${plan.date}-${action}-success.png`),

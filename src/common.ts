@@ -54,6 +54,17 @@ export type RecordRule = {
   labels: Record<Action, string>;
 };
 export type Config = {
+  email: {
+    enabled: boolean;
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    passwordEnv: string;
+    from: string;
+    to: string;
+    timeoutMs: number;
+  };
   site: {
     url: string;
     attendanceUrl?: string;
@@ -83,7 +94,14 @@ export type Config = {
     verificationTimeoutMs: number;
   };
 };
-export type Job = { at: string; status: Status; updatedAt?: string; detail?: string };
+export type EmailResult = { status: 'sent' | 'failed'; updatedAt: string; detail: string };
+export type Job = {
+  at: string;
+  status: Status;
+  updatedAt?: string;
+  detail?: string;
+  email?: EmailResult;
+};
 export type Plan = { date: string; checkIn: Job; checkOut: Job };
 
 export function ensureDirs() {
@@ -244,6 +262,38 @@ export function validateConfig(config: Config): void {
         `execution.${key} 必須為有效的${key === 'maxLateSeconds' ? '非負' : '正'}數值`,
       );
     }
+  }
+
+  const email = config.email;
+
+  if (!email || typeof email.enabled !== 'boolean' || typeof email.secure !== 'boolean') {
+    throw new Error('email.enabled 與 email.secure 必須為布林值');
+  }
+
+  for (const key of ['host', 'user', 'passwordEnv', 'from', 'to'] as const) {
+    if (typeof email[key] !== 'string' || /[\r\n]/.test(email[key])) {
+      throw new Error(`email.${key} 必須為單行字串`);
+    }
+  }
+
+  if (!Number.isInteger(email.port) || email.port < 1 || email.port > 65535) {
+    throw new Error('email.port 必須為 1 到 65535 的整數');
+  }
+
+  if (!Number.isFinite(email.timeoutMs) || email.timeoutMs < 1) {
+    throw new Error('email.timeoutMs 必須為正數');
+  }
+
+  if (email.enabled && [email.host, email.from, email.to].some((value) => !value.trim())) {
+    throw new Error('啟用寄信時必須設定 email.host、email.from 與 email.to');
+  }
+
+  if (Boolean(email.user) !== Boolean(email.passwordEnv)) {
+    throw new Error('email.user 與 email.passwordEnv 必須同時設定或留空');
+  }
+
+  if (email.passwordEnv && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(email.passwordEnv)) {
+    throw new Error('email.passwordEnv 必須為有效的環境變數名稱');
   }
 
   const calendar = config.site.calendar;

@@ -1,9 +1,14 @@
 import type { Dialog, Page } from 'playwright';
 import { type Action, type Config, localClock, log } from './common.js';
-import { readAttendance, readSiteSnapshot, type SiteSnapshot } from './site-data.js';
+import {
+  attendanceSeconds,
+  readAttendance,
+  readSiteSnapshot,
+  type SiteSnapshot,
+} from './site-data.js';
 
 export type PunchResult = {
-  status: 'success' | 'already' | 'skipped' | 'missed';
+  status: 'success' | 'already' | 'skipped' | 'missed' | 'pending';
   detail: string;
   snapshot: SiteSnapshot;
 };
@@ -36,6 +41,27 @@ export async function punchOnPage(
     snapshot,
   });
   const currentClock = () => localClock(config.schedule.timezone, options.now?.() ?? new Date());
+  const checkWorkDuration = (seconds: number): PunchResult | undefined => {
+    if (action !== 'checkOut') {
+      return;
+    }
+
+    const checkIn = snapshot.attendance.checkIn.at;
+
+    if (!checkIn) {
+      throw new Error('網站沒有今日上班紀錄，停止下班簽退');
+    }
+
+    const elapsed = seconds - attendanceSeconds(date, checkIn, config.site.records);
+
+    if (elapsed < 0) {
+      throw new Error('網站上班時間晚於目前時間，停止下班簽退');
+    }
+
+    if (elapsed <= 8 * 3600) {
+      return result('pending', `距網站上班紀錄 ${checkIn} 尚未超過 8 小時，未送出`);
+    }
+  };
 
   if (currentClock().date !== date) {
     throw new Error('日期已變更，停止操作');
@@ -51,6 +77,12 @@ export async function punchOnPage(
 
   if (options.latestSeconds !== undefined && currentClock().seconds > options.latestSeconds) {
     return result('missed', '完成網站查核時已超出允許的執行時間，未送出');
+  }
+
+  const durationResult = checkWorkDuration(currentClock().seconds);
+
+  if (durationResult) {
+    return durationResult;
   }
 
   const rule = config.site[action];
@@ -173,6 +205,12 @@ export async function punchOnPage(
 
     if (options.latestSeconds !== undefined && clock.seconds > options.latestSeconds) {
       return result('missed', '已超出允許時間，未送出');
+    }
+
+    const latestDurationResult = checkWorkDuration(clock.seconds);
+
+    if (latestDurationResult) {
+      return latestDurationResult;
     }
 
     options.beforeSend();

@@ -54,6 +54,15 @@ test('unsafe booleans, invalid dates, timeouts and unscoped confirms fail valida
     { execution: { maxLateSeconds: '180' } },
     { schedule: { skipDates: ['2026-02-30'] } },
     { site: { checkIn: { acceptConfirmDialogs: true, confirmDialogContains: '' } } },
+    { email: { enabled: 'true' } },
+    { email: { secure: 'false' } },
+    { email: { enabled: true } },
+    { email: { port: 0 } },
+    { email: { port: 65536 } },
+    { email: { timeoutMs: 0 } },
+    { email: { from: 'sender@example.test\r\nBcc: other@example.test' } },
+    { email: { user: 'sender@example.test' } },
+    { email: { user: 'sender@example.test', passwordEnv: 'invalid env name' } },
   ]) {
     assert.throws(() => validateConfig(mergeConfig(config, patch) as typeof config));
   }

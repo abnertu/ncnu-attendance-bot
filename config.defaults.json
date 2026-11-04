@@ -60,6 +60,17 @@
     "checkIn": { "from": "08:00", "to": "08:15" },
     "checkOut": { "from": "17:16", "to": "17:30" }
   },
+  "email": {
+    "enabled": false,
+    "host": "",
+    "port": 587,
+    "secure": false,
+    "user": "",
+    "passwordEnv": "",
+    "from": "",
+    "to": "",
+    "timeoutMs": 15000
+  },
   "execution": {
     "enabled": false,
     "headless": true,

@@ -1,5 +1,12 @@
 import type { BrowserContext, Frame, Page } from 'playwright';
-import { type Action, type CalendarRule, type Config, type RecordRule, isDate } from './common.js';
+import {
+  type Action,
+  type CalendarRule,
+  type Config,
+  type RecordRule,
+  isDate,
+  secondsOfTime,
+} from './common.js';
 import { openAttendanceView } from './navigation.js';
 
 export type CalendarDay = { date: string; working: boolean | null; note: string };
@@ -77,6 +84,17 @@ export function parseCalendar(title: string, cells: string[], rule: CalendarRule
   return { month: prefix, days: days.sort((a, b) => a.date.localeCompare(b.date)) };
 }
 
+/** Minute-only records use the end of that minute to avoid authorizing an early check-out. */
+export function attendanceSeconds(date: string, value: string, rule: RecordRule): number {
+  const match = new RegExp(rule.timestampPattern).exec(value);
+
+  if (!match || match[1] !== date || !/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(match[2])) {
+    throw new Error('網站時間格式或日期不符');
+  }
+
+  return secondsOfTime(match[2].length === 5 ? `${match[2]}:59` : match[2]);
+}
+
 export function parseAttendance(
   date: string,
   pageDate: string,
@@ -105,11 +123,7 @@ export function parseAttendance(
       continue;
     }
 
-    const match = new RegExp(rule.timestampPattern).exec(value);
-
-    if (!match || match[1] !== date) {
-      throw new Error(`${action} 的網站時間格式或日期不符`);
-    }
+    attendanceSeconds(date, value, rule);
 
     result[action] = { at: value };
   }
