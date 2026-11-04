@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type Plan, readConfig } from '../src/common.js';
 import { notifyPunchSuccess } from '../src/email.js';
+import { describeEmailError } from '../src/email-errors.js';
 
 function fixture() {
   const config = readConfig(join(tmpdir(), 'attendance-email-no-overrides.json'));
@@ -30,7 +31,7 @@ function fixture() {
     from: 'sender@example.test',
     to: 'recipient@example.test',
     user: 'sender@example.test',
-    passwordEnv: 'ATTENDANCE_SMTP_PASSWORD',
+    password: 'fixture-secret',
   });
 
   return { config, plan };
@@ -45,7 +46,6 @@ test('successful punches compose an email with the action, date and confirmation
     let sends = 0;
     const result = await notifyPunchSuccess(action, plan, config, {
       logger: () => {},
-      env: { ATTENDANCE_SMTP_PASSWORD: 'fixture-secret' },
       send: async (smtp, message) => {
         sends++;
         assert.equal(smtp.secure || smtp.requireTLS, true, 'credentials require TLS');
@@ -102,8 +102,9 @@ test('disabled notifications, existing records and unconfirmed submissions never
 
 test('missing SMTP credentials fail notification without changing attendance or exposing secrets', async () => {
   const { config, plan } = fixture();
+
+  config.email.password = '';
   const result = await notifyPunchSuccess('checkIn', plan, config, {
-    env: {},
     logger: () => {},
     send: async () => assert.fail('missing credentials must not open a connection'),
   });
@@ -116,7 +117,6 @@ test('SMTP errors preserve successful attendance and omit server responses from 
   const { config, plan } = fixture();
   const logs: string[] = [];
   const result = await notifyPunchSuccess('checkOut', plan, config, {
-    env: { ATTENDANCE_SMTP_PASSWORD: 'fixture-secret' },
     logger: (message) => logs.push(message),
     send: async () => {
       throw new Error('535 fixture-secret server-response');
@@ -127,4 +127,24 @@ test('SMTP errors preserve successful attendance and omit server responses from 
   assert.equal(plan.checkOut.status, 'success');
   assert.ok(logs[0].includes('EMAIL_FAILED'));
   assert.doesNotMatch(JSON.stringify({ result, logs }), /fixture-secret|server-response/);
+});
+
+test('email diagnostics identify certificate failures without exposing untrusted error fields', () => {
+  const error = Object.assign(new Error('fixture-secret certificate response'), {
+    code: 'ESOCKET',
+    originalCode: 'ERR_TLS_CERT_ALTNAME_INVALID',
+    response: 'fixture-secret',
+    command: 'AUTH fixture-secret',
+  });
+  const detail = describeEmailError(error);
+
+  assert.match(detail, /ESOCKET.*ERR_TLS_CERT_ALTNAME_INVALID/);
+  assert.match(detail, /憑證名稱.*主機不符/);
+  assert.match(detail, /email\.host/);
+  assert.doesNotMatch(detail, /fixture-secret|AUTH/);
+  assert.doesNotMatch(describeEmailError(new SyntaxError('fixture-secret')), /fixture-secret/);
+  assert.doesNotMatch(
+    describeEmailError({ code: 'FIXTURE_SECRET', response: 'fixture-secret' }),
+    /FIXTURE_SECRET|fixture-secret/,
+  );
 });

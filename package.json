@@ -11,6 +11,7 @@
     "tick": "tsx src/runner.ts",
     "plan": "tsx src/runner.ts --plan",
     "status": "tsx src/runner.ts --status",
+    "email:test": "tsx src/email-test.ts",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier --write .",

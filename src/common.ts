@@ -60,7 +60,7 @@ export type Config = {
     port: number;
     secure: boolean;
     user: string;
-    passwordEnv: string;
+    password: string;
     from: string;
     to: string;
     timeoutMs: number;
@@ -270,7 +270,7 @@ export function validateConfig(config: Config): void {
     throw new Error('email.enabled 與 email.secure 必須為布林值');
   }
 
-  for (const key of ['host', 'user', 'passwordEnv', 'from', 'to'] as const) {
+  for (const key of ['host', 'user', 'password', 'from', 'to'] as const) {
     if (typeof email[key] !== 'string' || /[\r\n]/.test(email[key])) {
       throw new Error(`email.${key} 必須為單行字串`);
     }
@@ -288,12 +288,8 @@ export function validateConfig(config: Config): void {
     throw new Error('啟用寄信時必須設定 email.host、email.from 與 email.to');
   }
 
-  if (Boolean(email.user) !== Boolean(email.passwordEnv)) {
-    throw new Error('email.user 與 email.passwordEnv 必須同時設定或留空');
-  }
-
-  if (email.passwordEnv && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(email.passwordEnv)) {
-    throw new Error('email.passwordEnv 必須為有效的環境變數名稱');
+  if (Boolean(email.user) !== Boolean(email.password)) {
+    throw new Error('email.user 與 email.password 必須同時設定或留空');
   }
 
   const calendar = config.site.calendar;

@@ -80,9 +80,8 @@ pnpm run sync
 
 上班簽到或下班簽退確認成功後，可透過 SMTP 自動寄信。寄信預設關閉。
 
-1. 在個人 `config.json` 加入下列設定，並替換 SMTP 主機、帳號及寄收件地址。
-2. 將 SMTP 密碼或應用程式密碼存入安裝排程帳號的使用者環境變數。
-3. 重新開啟終端機，讓手動指令讀取新環境變數。
+在個人 `config.json` 加入下列設定，並替換 SMTP 主機、帳號及寄收件地址。
+直接將 SMTP 密碼或應用程式密碼填入 `email.password`。
 
 ```json
 {
@@ -92,7 +91,7 @@ pnpm run sync
     "port": 587,
     "secure": false,
     "user": "sender@example.com",
-    "passwordEnv": "ATTENDANCE_SMTP_PASSWORD",
+    "password": "your-smtp-password",
     "from": "sender@example.com",
     "to": "recipient@example.com",
     "timeoutMs": 15000
@@ -100,29 +99,34 @@ pnpm run sync
 }
 ```
 
-在 PowerShell 設定使用者環境變數，避免將密碼寫入命令歷程：
-
-```powershell
-$smtpPassword = Read-Host 'SMTP 密碼或應用程式密碼' -AsSecureString
-$smtpCredential = New-Object System.Management.Automation.PSCredential -ArgumentList 'smtp', $smtpPassword
-[Environment]::SetEnvironmentVariable(
-  'ATTENDANCE_SMTP_PASSWORD',
-  $smtpCredential.GetNetworkCredential().Password,
-  'User'
-)
-```
-
-使用者環境變數不會加密儲存密碼。`config.json` 只記錄環境變數名稱。
+密碼由 `config.json` 直接讀取，不使用環境變數。
+舊設定請將 `passwordEnv` 改成 `password`，並填入實際密碼。
+`config.json` 不納入 Git；請勿將密碼填入 `config.defaults.json`。
 
 587 埠使用 `secure=false`，並強制 STARTTLS。465 埠使用 `secure=true`。伺服器必須提供有效的 TLS 憑證。設定方式見 [Nodemailer SMTP 說明](https://nodemailer.com/smtp)。
 
-不需驗證的 SMTP 主機，可將 `user` 與 `passwordEnv` 同時留空。排程仍使用安裝者帳號的環境變數。若排程讀不到新變數，請登出再登入 Windows。
+不需驗證的 SMTP 主機，可將 `user` 與 `password` 同時留空。
 
 程式先保存打卡成功狀態，再寄出通知。已有網站紀錄、跳過、逾時或結果不明時不寄信。
 
 `pnpm run status` 會顯示工作的 `email.status`，值為 `sent` 或 `failed`。`sent` 表示 SMTP 已接受郵件，不保證郵件已送達信箱。
 
 寄信失敗不改變打卡成功狀態，也不自動重寄或重新打卡。日誌記錄 `EMAIL_SENT` 或 `EMAIL_FAILED`。
+
+完成 SMTP 設定並啟用 `email.enabled=true` 後，可寄出一封測試信：
+
+```powershell
+pnpm run email:test
+```
+
+也可執行 `just email-test`。測試信主旨為 `[attendance-bot] test email`。
+
+此指令不受 `execution.enabled` 影響。此指令不連線差勤網站，也不讀寫出勤狀態。
+
+SMTP 接受郵件時回傳結束碼 `0`。設定錯誤或寄送失敗時回傳非零結束碼。
+
+失敗時會顯示錯誤代碼、SMTP 回覆碼及對應說明，不顯示密碼或原始伺服器回覆。
+`EAUTH` 表示帳密驗證失敗；`ERR_TLS_CERT_ALTNAME_INVALID` 表示憑證名稱與 SMTP 主機不符。
 
 ## 啟用排程
 

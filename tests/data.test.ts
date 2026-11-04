@@ -62,7 +62,8 @@ test('unsafe booleans, invalid dates, timeouts and unscoped confirms fail valida
     { email: { timeoutMs: 0 } },
     { email: { from: 'sender@example.test\r\nBcc: other@example.test' } },
     { email: { user: 'sender@example.test' } },
-    { email: { user: 'sender@example.test', passwordEnv: 'invalid env name' } },
+    { email: { user: 'sender@example.test', password: 123 } },
+    { email: { password: 'fixture-secret' } },
   ]) {
     assert.throws(() => validateConfig(mergeConfig(config, patch) as typeof config));
   }

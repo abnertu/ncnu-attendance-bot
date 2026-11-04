@@ -31,6 +31,10 @@ plan:
 status:
     pnpm.cmd run status
 
+# Send one test email with the configured SMTP service.
+email-test:
+    pnpm.cmd run email:test
+
 # Run one scheduling cycle; enabled configurations may submit attendance.
 tick:
     pnpm.cmd run tick
